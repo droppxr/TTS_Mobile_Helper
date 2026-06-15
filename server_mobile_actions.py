@@ -46,11 +46,17 @@ def add_security_headers(response):
 tts_api_chatgpt = None
 TTS_API_DEBUG_INCOMING = False
 TTS_API_DEBUG_OUTGOING = False
+HOST_OVERRIDE = None
 
 
 def parse_start_arguments(argv=None):
     parser = argparse.ArgumentParser(
         description="TTS Mobile Companion Server"
+    )
+    parser.add_argument(
+        "--host",
+        dest="host",
+        help="Use this IP address instead of auto-detecting the local IP.",
     )
     parser.add_argument(
         "--debug-tts-api",
@@ -71,9 +77,10 @@ def parse_start_arguments(argv=None):
 
 
 def apply_start_arguments(args):
-    global TTS_API_DEBUG_INCOMING, TTS_API_DEBUG_OUTGOING
+    global TTS_API_DEBUG_INCOMING, TTS_API_DEBUG_OUTGOING, HOST_OVERRIDE
     TTS_API_DEBUG_INCOMING = bool(args.debug_tts_api or args.debug_tts_incoming)
     TTS_API_DEBUG_OUTGOING = bool(args.debug_tts_api or args.debug_tts_outgoing)
+    HOST_OVERRIDE = args.host
 
 
 def get_tts_api_chatgpt():
@@ -476,7 +483,10 @@ def get_local_ip():
         s.connect(('10.255.255.255', 1))
         IP = s.getsockname()[0]
     except Exception:
-        IP = '127.0.0.1'
+        try:
+            IP = socket.gethostbyname(socket.gethostname())
+        except Exception:
+            IP = '127.0.0.1'
     finally:
         s.close()
     return IP
@@ -487,6 +497,8 @@ PORT = 5001  # Port fuer das Handy-Webinterface
 
 def get_server_ip():
     global LOCAL_IP
+    if HOST_OVERRIDE:
+        return HOST_OVERRIDE
     if LOCAL_IP is None:
         LOCAL_IP = get_local_ip()
     return LOCAL_IP
@@ -496,6 +508,10 @@ def print_start_qr_codes():
     local_ip = get_server_ip()
     print("\n" + "="*50)
     print(f"SERVER GESTARTET! Lokale IP: {local_ip}")
+    if local_ip == '127.0.0.1':
+        print("[WARNUNG] Die IP wurde als 127.0.0.1 erkannt. Dein Handy kann diese Adresse NICHT erreichen.")
+        print("         Verwende stattdessen die IP-Adresse deines PCs im gleichen WLAN, z.B. 192.168.x.x.")
+        print("         Du kannst das Skript mit --host <IP> starten, z.B. --host 192.168.1.100")
     print("Scanne den passenden QR-Code mit dem Handy:")
     for label, url in [
         ("Admin", f"http://{local_ip}:{PORT}/?admin=1"),
